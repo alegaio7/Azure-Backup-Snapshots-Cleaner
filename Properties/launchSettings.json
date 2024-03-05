@@ -1,6 +1,6 @@
 {
   "profiles": {
-    "Azure_Backup_Vault_Snapshots_Cleaner": {
+    "Azure_Backup_Snapshots_Cleaner": {
       "commandName": "Project",
       "commandLineArgs": "--port 7297",
       "launchBrowser": false

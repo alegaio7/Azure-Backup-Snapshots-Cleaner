@@ -1,0 +1,18 @@
+{
+  "SnapshotFilters": {
+    "Filters": [
+        {
+          "Id": 0,
+          "Description": "Process snapshots in East Us 2 only, starting with 'AzureBackup_'",
+          "StartsWith": "AzureBackup_",
+          "Tags": [
+            {
+              "Name": "CreatedBy",
+              "Value": "AzureBackup",
+              "MatchOnlyWithName": false 
+            }
+          ]
+        }
+      ]
+    }
+  }

@@ -7,39 +7,66 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
-namespace Azure_Backup_Vault_Snapshots_Cleaner
+namespace Azure_Backup_Snapshots_Cleaner
 {
     public class Cleaner
     {
         private readonly ILogger<Cleaner> _logger;
+        private readonly IOptions<SnapshotFilterOptions> _filters;
 
-        public Cleaner(ILogger<Cleaner> logger)
+        private const int MIN_SNAPSHOT_DAYS = 3;
+        private const int MAX_SNAPSHOT_DAYS = 3650;
+
+        public Cleaner(ILogger<Cleaner> logger, IOptions<SnapshotFilterOptions> filters)
         {
             _logger = logger;
+            _filters = filters;
         }
 
-        [Function(nameof(CleanSnapshots))]
-        public async Task<IActionResult> CleanSnapshots([TimerTrigger("0 */5 * * * *", RunOnStartup = true)] TimerInfo timerInfo)
+#if DEBUG
+        [Function(nameof(ManualTrigger))]
+        public async Task ManualTrigger([HttpTrigger(AuthorizationLevel.Admin, "get")] HttpRequest req)
         {
-            _logger.LogInformation("Initiating backup vault items listing...");
+            _logger.LogInformation($"Calling ${nameof(CleanSnapshots)} manually... ");
+            await CleanSnapshots(new TimerInfo());
+        }
+#endif
+
+        [Function(nameof(CleanSnapshots))]
+        public async Task CleanSnapshots([TimerTrigger("%FUNCTION_SCHEDULE%")] TimerInfo timerInfo)
+        {
+            string? s = default;
+
+            _logger.LogInformation("Initiating snapshots listing...");
 
             try
             {
+                if (_filters is null || _filters.Value is null)
+                {
+                    s = "Filters are not set.";
+                    throw new Exception(s);
+                }
+
+                var filters = _filters.Value.Filters;
+                if (filters is null || filters.Count == 0)
+                {
+                    s = "Filters collection is empty. Please check filters configuration file.";
+                    throw new Exception(s);
+                }
+
                 var daysToKeep = Environment.GetEnvironmentVariable("SNAPSHOTS_DAYS_TO_KEEP");
-                string? s = default;
 
                 if (string.IsNullOrEmpty(daysToKeep))
                 {
                     s = "Environment variable SNAPSHOTS_DAYS_TO_KEEP is not set.";
-                    _logger.LogError(s);
                     throw new Exception(s);
                 }
 
-                if (!int.TryParse(daysToKeep, out int days) || days < 3 || days > 3650)
+                if (!int.TryParse(daysToKeep, out int days) || days < MIN_SNAPSHOT_DAYS || days > MAX_SNAPSHOT_DAYS)
                 {
-                    s = "Environment variable SNAPSHOTS_DAYS_TO_KEEP is not a valid integer. Please use a value between 14 and 3650";
-                    _logger.LogError(s);
+                    s = $"Environment variable SNAPSHOTS_DAYS_TO_KEEP is not a valid integer. Please use a value between {MIN_SNAPSHOT_DAYS} and {MAX_SNAPSHOT_DAYS}";
                     throw new Exception(s);
                 }
 
@@ -59,22 +86,69 @@ namespace Azure_Backup_Vault_Snapshots_Cleaner
                 {
                     if (item.Data.ResourceType.Type == "snapshots")
                     {
-                        if (item.Data.CreatedOn.HasValue && item.Data.CreatedOn.Value < DateTime.UtcNow.AddDays(days * -1))
-                            _logger.LogInformation($"Deleting snapshot {item.Data.Name}...");
-                        // await item.DeleteAsync();
+                        // check that the snapshot passes the filters
+                        foreach (var f in filters)
+                        {
+                            var filterId = CheckIsSnapshotFiltered(item, f);
+                            if (filterId.HasValue)
+                            {
+                                _logger.LogInformation($"Snapshot {item.Data.Name}, created on {item.Data.CreatedOn?.ToString("s")} passed filter id {filterId}.");
+
+                                if (item.Data.CreatedOn.HasValue && item.Data.CreatedOn.Value < DateTime.UtcNow.AddDays(days * -1))
+                                {
+                                    // await item.DeleteAsync();
+                                    _logger.LogWarning($"Snapshot {item.Data.Name} deleted.");
+                                }
+                                else
+                                    _logger.LogInformation($"Snapshot {item.Data.Name} was outside the deletion time window");
+                            }
+                        }
                     }
                 }
-                
-                return new OkObjectResult("OK!");
-
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Error @ {nameof(CleanSnapshots)}");
                 throw;
             }
+        }
 
-            return new OkObjectResult("OK!");
+        /// <summary>
+        /// Checks whether a snapshot item passes a defined filter. If so, it returns the filter id, otherwise it returns null
+        /// </summary>
+        /// <param name="item"></param>
+        /// <param name="filter"></param>
+        /// <returns></returns>
+        private int? CheckIsSnapshotFiltered(GenericResource item, SnapshotFilterOptions.SnapshotFilter filter)
+        {
+            var itemName = item.Data.Name.ToLower();
+
+            if (!string.IsNullOrEmpty(filter.StartsWith))
+            {
+                if (!itemName.StartsWith(filter.StartsWith.ToLower()))
+                    return null;
+            }
+
+            if (filter.Tags != null && filter.Tags.Count > 0)
+            {
+                foreach (var tag in filter.Tags)
+                {
+                    if (item.Data.Tags.ContainsKey(tag.Name))
+                    {
+                        if (tag.MatchOnlyWithName)
+                            return filter.Id;
+
+                        if (string.IsNullOrEmpty(tag.Value))
+                            continue;
+
+                        var value = item.Data.Tags[tag.Name];
+                        if (!string.IsNullOrEmpty(value) && value.ToLower() == tag.Value.ToLower())
+                            return filter.Id;
+                    }
+                }
+            }
+
+            return null;
         }
     }
 }

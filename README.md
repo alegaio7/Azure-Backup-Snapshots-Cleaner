@@ -4,6 +4,8 @@ A timer-triggered Azure Function that removes old disk snapshots create by Azure
 
 Azure Backup Vault is one way to protect VM disk in Azure in an easy way, however, it does not provide a way to automatically remove old snapshots. 
 
+I found (the hard way) that a single disk can have up to 500 snapshots, after which the backup process will fail.
+
 This function is designed to run on a schedule and remove old snapshots based on a set of filters.
 
 ## Configuration

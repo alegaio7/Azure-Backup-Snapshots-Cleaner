@@ -22,8 +22,13 @@ The function expects the following environment variables to defined:
 - SNAPSHOTS_DAYS_TO_KEEP: The minimum age of snapshots to keep. Snapshots older than this value will be deleted (only if the pass the defined filters).
 - FUNCTION_SCHEDULE: The CRON expression that defines the schedule for the function to run. For more information on CRON expressions, see [CRON expressions](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-timer?tabs=python-v2%2Cisolated-process%2Cnodejs-v4&pivots=programming-language-csharp#ncrontab-expressions).
 
+When in development mode, add these environment variables to **local.settings.json**.
+They can be updated automatically in Azure according to the project configuration. Check https://learn.microsoft.com/en-us/azure/azure-functions/functions-develop-local#local-settings-file
+
+Otherwise, add them manually to the function's [app settings section](https://learn.microsoft.com/en-us/azure/azure-functions/functions-how-to-use-azure-function-app-settings?tabs=portal#settings)
+
 ### Filters configuration
-Filters are configured in a separate file named filters.json. This is due the fact that a more complex (json) structure is needed for this, and Azure standard configuration options only work with key-value pairs.
+Filters are configured in a separate file named **filters.json**. This is due to the fact that a more complex (json) structure is needed to define these filters, and Azure app settings only work with key-value pairs.
 
 The file defines a collection of filters, which contain these properties:
 - Id: The filter ID. This is used to identify the filter in the logs.

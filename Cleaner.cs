@@ -131,6 +131,10 @@ namespace Azure_Backup_Snapshots_Cleaner
 
             if (filter.Tags != null && filter.Tags.Count > 0)
             {
+                // If filters are defined, but the item has no tags, it's not a match
+                if (item.Data.Tags == null || item.Data.Tags.Count == 0)
+                    return null;
+
                 foreach (var tag in filter.Tags)
                 {
                     if (item.Data.Tags.ContainsKey(tag.Name))

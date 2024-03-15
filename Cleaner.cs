@@ -1,6 +1,7 @@
 using Azure.Core;
 using Azure.Identity;
 using Azure.ResourceManager;
+using Azure.ResourceManager.Models;
 using Azure.ResourceManager.RecoveryServices.Models;
 using Azure.ResourceManager.Resources;
 using Microsoft.AspNetCore.Http;
@@ -82,6 +83,7 @@ namespace Azure_Backup_Snapshots_Cleaner
                 var filter = "resourceType eq 'Microsoft.Compute/snapshots'";
                 var expand = "createdTime";
                 var resList = resourceGroupResource.GetGenericResourcesAsync(filter: filter, expand: expand);
+                var itemsToDeleteList = new List<GenericResource>();
                 await foreach (var item in resList)
                 {
                     if (item.Data.ResourceType.Type == "snapshots")
@@ -93,11 +95,11 @@ namespace Azure_Backup_Snapshots_Cleaner
                             if (filterId.HasValue)
                             {
                                 _logger.LogInformation($"Snapshot {item.Data.Name}, created on {item.Data.CreatedOn?.ToString("s")} passed filter id {filterId}.");
-
+                                
                                 if (item.Data.CreatedOn.HasValue && item.Data.CreatedOn.Value < DateTime.UtcNow.AddDays(days * -1))
                                 {
-                                    // await item.DeleteAsync();
-                                    _logger.LogWarning($"Snapshot {item.Data.Name} deleted.");
+                                    itemsToDeleteList.Add(item);
+                                    _logger.LogWarning($"The snapshot {item.Data.Name} is marked for deletion.");
                                 }
                                 else
                                     _logger.LogInformation($"Snapshot {item.Data.Name} was outside the deletion time window");
@@ -105,6 +107,21 @@ namespace Azure_Backup_Snapshots_Cleaner
                         }
                     }
                 }
+
+                foreach (var item in itemsToDeleteList)
+                {
+                    _logger.LogWarning($"Deleting snapshot {item.Data.Name}...");
+                    var armOp = await item.DeleteAsync(Azure.WaitUntil.Completed);
+                    var azResponse = armOp.UpdateStatus();
+                    if (azResponse.IsError)
+                        // TODO Add more useful error information
+                        _logger.LogError($"Error deleting snapshot {item.Data.Name}: {azResponse.Status}");
+                    else
+                        _logger.LogInformation($"Snapshot {item.Data.Name} deleted.");
+
+                    break;
+                }
+
             }
             catch (Exception ex)
             {

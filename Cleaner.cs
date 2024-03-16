@@ -117,11 +117,8 @@ namespace Azure_Backup_Snapshots_Cleaner
                         // TODO Add more useful error information
                         _logger.LogError($"Error deleting snapshot {item.Data.Name}: {azResponse.Status}");
                     else
-                        _logger.LogInformation($"Snapshot {item.Data.Name} deleted.");
-
-                    break;
+                        _logger.LogWarning($"Snapshot {item.Data.Name} deleted.");
                 }
-
             }
             catch (Exception ex)
             {

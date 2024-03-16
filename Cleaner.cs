@@ -26,14 +26,14 @@ namespace Azure_Backup_Snapshots_Cleaner
             _filters = filters;
         }
 
-// #if DEBUG
+#if DEBUG
         [Function(nameof(ManualTrigger))]
         public async Task ManualTrigger([HttpTrigger(AuthorizationLevel.Admin, "get")] HttpRequest req)
         {
             _logger.LogInformation($"Calling ${nameof(CleanSnapshots)} manually... ");
             await CleanSnapshots(new TimerInfo());
         }
-// #endif
+#endif
 
         [Function(nameof(CleanSnapshots))]
         public async Task CleanSnapshots([TimerTrigger("%FUNCTION_SCHEDULE%")] TimerInfo timerInfo)

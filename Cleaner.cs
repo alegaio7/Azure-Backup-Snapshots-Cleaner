@@ -71,6 +71,8 @@ namespace Azure_Backup_Snapshots_Cleaner
                     throw new Exception(s);
                 }
 
+                _logger.LogInformation($"Snapshots older than {days} days will be considered for removal.");
+
                 TokenCredential cred = new DefaultAzureCredential();
 
                 ArmClient client = new ArmClient(cred);
@@ -99,7 +101,7 @@ namespace Azure_Backup_Snapshots_Cleaner
                                 if (item.Data.CreatedOn.HasValue && item.Data.CreatedOn.Value < DateTime.UtcNow.AddDays(days * -1))
                                 {
                                     itemsToDeleteList.Add(item);
-                                    _logger.LogWarning($"The snapshot {item.Data.Name} is marked for deletion.");
+                                    _logger.LogWarning($"The snapshot {item.Data.Name}, created on {item.Data.CreatedOn.Value.ToString("s")}, is marked for deletion.");
                                 }
                                 else
                                     _logger.LogInformation($"Snapshot {item.Data.Name} was outside the deletion time window");
